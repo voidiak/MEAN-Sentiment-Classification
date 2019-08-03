@@ -53,5 +53,8 @@ class MEANBatch(ProxyDataFlow):
             labels = np.asarray(labels)
             lens = np.asarray(lens)
             max_sent_len = np.asarray(max_sent_len)
-            chars = np.vstack(chars)
-            yield [sents, chars, labels, lens, max_sent_len]
+            _chars = np.zeros((self.batch, max_sent_len, MAX_WORD_LEN))
+            for i in range(self.batch):
+                x = chars[i]
+                _chars[i,:len(x)] = x
+            yield [sents, _chars, labels, lens, max_sent_len]

@@ -38,9 +38,6 @@ class Model(ModelDesc):
         self.n_c = n['char']
         self.i_c = i['char']
         self.s_c = s['char']
-        self.n_n = n['num']
-        self.i_n = i['num']
-        self.s_n = s['num']
 
     def inputs(self):
         return [tf.TensorSpec([None, None], tf.int32, 'input_w'),
@@ -149,10 +146,10 @@ class Model(ModelDesc):
         x_c_n = tf.matmul(negation_word_repre, m_n, transpose_a=True, transpose_b=True)
         x_c = x_c_s + x_c_i + x_c_n
 
-        x_c = tf.reshape(x_c, [BATCH_SIZE, max_len, 600])
-        x_s = tf.reshape(x_s, [BATCH_SIZE, max_len, 600])
-        x_i = tf.reshape(x_i, [BATCH_SIZE, max_len, 600])
-        x_n = tf.reshape(x_n, [BATCH_SIZE, max_len, 600])
+        x_c = tf.reshape(x_c, [BATCH_SIZE, -1, 600])
+        x_s = tf.reshape(x_s, [BATCH_SIZE, -1, 600])
+        x_i = tf.reshape(x_i, [BATCH_SIZE, -1, 600])
+        x_n = tf.reshape(x_n, [BATCH_SIZE, -1, 600])
 
         h_c = tf.keras.layers.CuDNNGRU(RNN_DIM, return_sequences=True, name='gru_c')(x_c)
         h_s = tf.keras.layers.CuDNNGRU(RNN_DIM, return_sequences=True, name='gru_s')(x_s)
