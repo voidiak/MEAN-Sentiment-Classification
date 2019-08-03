@@ -3,7 +3,8 @@ from six.moves import range
 import numpy as np
 from keras.preprocessing.sequence import pad_sequences
 WORD_EMBED_DIM = 300
-CHAR_EMBED_DIM = 62 + 1
+CHAR_EMBED_DIM = 56 + 1
+MAX_WORD_LEN = 20
 
 def word_embed(wordlist, w2v_model):
     embed_matrix = []
@@ -42,11 +43,15 @@ class MEANBatch(ProxyDataFlow):
             lens=[]
             for b in range(self.batch):
                 label, sentence, sent_chars, sent_len = next(itr)
-                # TODO:PAD Sentences
                 labels.append(label)
                 sents.append(sentence)
                 chars.append(sent_chars)
                 lens.append(sent_len)
             max_sent_len = max(lens)
             sents = pad_sequences(sents, max_sent_len, padding='post')
+            sents = np.asarray(sents)
+            labels = np.asarray(labels)
+            lens = np.asarray(lens)
+            max_sent_len = np.asarray(max_sent_len)
+            chars = np.vstack(chars)
             yield [sents, chars, labels, lens, max_sent_len]
