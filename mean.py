@@ -17,12 +17,14 @@ import pickle
 WORD_EMBED_DIM = 300
 CHAR_EMBED_DIM = 56 + 1
 EMBED_LOC = './data/wordvector/glove.refine.txt'
-BATCH_SIZE = 5
+BATCH_SIZE = 60
 RNN_DIM = 300
 mu = 1e-4
 psi = 0.9
 MAX_WORD_LEN = 20
 MAX_LEN = 100
+EPOCHS = 40
+
 
 class Model(ModelDesc):
     def __init__(self):
@@ -151,10 +153,18 @@ class Model(ModelDesc):
         x_i = tf.reshape(x_i, [BATCH_SIZE, -1, 600])
         x_n = tf.reshape(x_n, [BATCH_SIZE, -1, 600])
 
-        h_c = tf.keras.layers.CuDNNGRU(RNN_DIM, return_sequences=True, name='gru_c')(x_c)
-        h_s = tf.keras.layers.CuDNNGRU(RNN_DIM, return_sequences=True, name='gru_s')(x_s)
-        h_i = tf.keras.layers.CuDNNGRU(RNN_DIM, return_sequences=True, name='gru_i')(x_i)
-        h_n = tf.keras.layers.CuDNNGRU(RNN_DIM, return_sequences=True, name='gru_n')(x_n)
+        # h_c = tf.keras.layers.CuDNNGRU(RNN_DIM, return_sequences=True, name='gru_c')(x_c)
+        # h_s = tf.keras.layers.CuDNNGRU(RNN_DIM, return_sequences=True, name='gru_s')(x_s)
+        # h_i = tf.keras.layers.CuDNNGRU(RNN_DIM, return_sequences=True, name='gru_i')(x_i)
+        # h_n = tf.keras.layers.CuDNNGRU(RNN_DIM, return_sequences=True, name='gru_n')(x_n)
+        c_cell = tf.contrib.rnn.DropoutWrapper(tf.nn.rnn_cell.GRUCell(RNN_DIM, name='c_GRU'), output_keep_prob=0.5)
+        s_cell = tf.contrib.rnn.DropoutWrapper(tf.nn.rnn_cell.GRUCell(RNN_DIM, name='s_GRU'), output_keep_prob=0.5)
+        i_cell = tf.contrib.rnn.DropoutWrapper(tf.nn.rnn_cell.GRUCell(RNN_DIM, name='i_GRU'), output_keep_prob=0.5)
+        n_cell = tf.contrib.rnn.DropoutWrapper(tf.nn.rnn_cell.GRUCell(RNN_DIM, name='n_GRU'), output_keep_prob=0.5)
+        h_c, _ = tf.nn.dynamic_rnn(c_cell, x_c, sequence_length=x_len, dtype=tf.float32)
+        h_s, _ = tf.nn.dynamic_rnn(s_cell, x_s, sequence_length=x_len, dtype=tf.float32)
+        h_i, _ = tf.nn.dynamic_rnn(i_cell, x_i, sequence_length=x_len, dtype=tf.float32)
+        h_n, _ = tf.nn.dynamic_rnn(n_cell, x_n, sequence_length=x_len, dtype=tf.float32)
 
         q_s = tf.reduce_mean(h_s, 1, keepdims=True)
         q_i = tf.reduce_mean(h_i, 1, keepdims=True)
@@ -192,7 +202,7 @@ class Model(ModelDesc):
         w = tf.get_variable('w', [3*RNN_DIM, 2], initializer=tf.contrib.layers.xavier_initializer())
         b = tf.get_variable('b', initializer=np.zeros([2]).astype(np.float32))
         p_pred = tf.nn.xw_plus_b(output, w, b)
-        p_pred = Dropout(p_pred,keep_prob=0.5)
+        p_pred = Dropout(p_pred, keep_prob=0.5)
         labels = tf.one_hot(label, 2, axis=-1, dtype=tf.int32, name='onehot_label')
         supervised_loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(logits=p_pred, labels=labels))
         l2_loss = tf.contrib.layers.apply_regularization(self.regularizer, tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES))
@@ -200,13 +210,14 @@ class Model(ModelDesc):
         loss = supervised_loss + l2_loss + mu*diversity_loss
         loss = tf.identity(loss, "total_loss")
         y_pred = tf.argmax(tf.nn.softmax(p_pred), axis=1, output_type=tf.int32)
-        accuracy_ = tf.cast(tf.equal(y_pred, label), tf.float32, name='accuracy')
+        label_ = tf.reshape(label, [BATCH_SIZE, ])
+        accuracy_ = tf.cast(tf.equal(y_pred, label_), tf.float32, name='accu')
         mean_accuracy = tf.reduce_mean(accuracy_)
         summary.add_moving_summary(loss, mean_accuracy)
         return loss
 
     def optimizer(self):
-        lr = tf.get_variable('learning_rate', initializer=1e-3, trainable=False)
+        lr = tf.get_variable('learning_rate', initializer=5e-3, trainable=False)
         opt = tf.train.RMSPropOptimizer(lr)
         return opt
 
@@ -222,20 +233,21 @@ def get_config(ds_train, ds_dev, ds_test):
         data = QueueInput(ds_train),
         callbacks=[
             ModelSaver(),
-            # InferenceRunner(ds_dev, [ScalarStats('total_loss'), ClassificationError('accu', 'accuracy')]),
+            InferenceRunner(ds_dev, [ScalarStats('total_loss'), ClassificationError('accu', 'accuracy')]),
             MaxSaver('accuracy'),
             MovingAverageSummary(),
             MergeAllSummaries(),
             GPUMemoryTracker()
         ],
-        steps_per_epoch=100,
+        # steps_per_epoch=100,
         model = Model(),
-        max_epoch=20
+        max_epoch=EPOCHS
     )
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--gpu', default='1', help='comma separated list of GPU(s) to use.')
+    parser.add_argument('--gpu', default='0', help='comma separated list of GPU(s) to use.')
     parser.add_argument('--load', help='load model')
     args = parser.parse_args()
     logger.auto_set_dir(action='d')

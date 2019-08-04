@@ -15,16 +15,6 @@ def word_embed(wordlist, w2v_model):
             embed_matrix.append(np.zeros(WORD_EMBED_DIM))
     return np.array(embed_matrix, dtype=np.float32)
 
-def char_embed(charlist):
-    char_matrix =[]
-    char_vocab = np.eye(CHAR_EMBED_DIM)
-    for char in charlist:
-        if char in char_vocab:
-            char_matrix.append(char_vocab[char])
-        else:
-            char_matrix.append(np.zeros(CHAR_EMBED_DIM))
-    return np.array(char_matrix, dtype=np.float32)
-
 class MEANBatch(ProxyDataFlow):
 
     def __init__(self, ds, batch):
@@ -56,5 +46,5 @@ class MEANBatch(ProxyDataFlow):
             _chars = np.zeros((self.batch, max_sent_len, MAX_WORD_LEN))
             for i in range(self.batch):
                 x = chars[i]
-                _chars[i,:len(x)] = x
+                _chars[i, :len(x)] = x
             yield [sents, _chars, labels, lens, max_sent_len]
